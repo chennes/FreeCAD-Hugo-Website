@@ -1,0 +1,49 @@
+
+# Production action workflow
+#
+# Website deployment to FreeCAD production server.
+# Manual trigger by workflow_dispatch.
+
+
+name: Production deploy
+run-name: Production deployment by @${{ github.triggering_actor }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure SSH
+        env:
+          PRODUCTION_DEPLOY_KEY: ${{ secrets.PRODUCTION_DEPLOY_KEY }}
+          PRODUCTION_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$PRODUCTION_DEPLOY_KEY" > ~/.ssh/production_deploy
+          chmod 600 ~/.ssh/production_deploy
+          printf '%s\n' "$PRODUCTION_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # The remote deploy script is pinned as a forced command in the
+      # www-deploy account authorized_keys, so no command is sent here.
+      - name: Deploy
+        run: |
+          ssh \
+            -i ~/.ssh/production_deploy \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            -n \
+            www-deploy@${{ vars.PRODUCTION_DEPLOY_HOST }}
